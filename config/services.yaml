@@ -1,0 +1,40 @@
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
+parameters:
+    locale: 'en'
+    dependent_classes:
+        city_on_country:
+            class: App\Entity\City
+            property: country
+        hotel_on_city:
+            class: App\Entity\Hotel
+            property: city
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    App\:
+        resource: '../src/*'
+        exclude: '../src/{Entity,Migrations,Tests}'
+
+    App\Controller\:
+        resource: '../src/Controller'
+        tags: ['controller.service_arguments']
+
+    App\Form\DependentEntityType:
+        arguments:
+            - '@doctrine.orm.default_entity_manager'
+            - '%dependent_classes%'
+        tags:
+            - {name: form.type}
+
+    App\Service\HotelSearch:
+        public: true
+
+    App\Service\HotelRetriever:
+        arguments:
+            - '@doctrine.orm.default_entity_manager'
+            - '%env(resolve:API_WSDL)%'

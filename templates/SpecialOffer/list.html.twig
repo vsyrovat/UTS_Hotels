@@ -1,0 +1,38 @@
+{% extends 'base.html.twig' %}
+
+{% block body -%}
+    <h1>Special offers</h1>
+    <div class="panel panel-heading row">
+        <div class="col-lg-1">Id</div>
+        <div class="col-lg-6">Name</div>
+        <div class="col-lg-2">Discount</div>
+        <div class="col-lg-1">Is active</div>
+    </div>
+    {% for entity in entities %}
+        <div class="row">
+            <div class="col-lg-1">{{ entity.id }}</div>
+            <div class="col-lg-6">{{ entity.name }}</div>
+            <div class="col-lg-2">
+                {% if entity.discount.type == 'm' %}
+                    {{ entity.discount.value }} %
+                {% else %}
+                    {{ entity.discount.value }} RUB
+                {% endif %}
+            </div>
+            <div class="col-lg-1">{% if entity.isActive %}Да{% else %}Нет{% endif %}</div>
+            <div class="col-lg-1"><a href="{{ path('special_offer_edit', { 'offer': entity.id }) }}">edit</a></div>
+            <div class="col-lg-1"><a href="{{ path('special_offer_delete', { 'offer': entity.id }) }}">delete</a></div>
+        </div>
+    {% endfor %}
+    <hr/>
+    <div class="row">
+        <ul>
+            <li>
+                <a href="{{ path('special_offer_add') }}">
+                    Add offer
+                </a>
+            </li>
+        </ul>
+    </div>
+
+{% endblock %}

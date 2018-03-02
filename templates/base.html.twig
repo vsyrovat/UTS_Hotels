@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>{% block title %}ЮТС{% endblock %}</title>
+        {% block stylesheets %}
+            <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ" crossorigin="anonymous">
+        {% endblock %}
+        {% block javascripts %}
+            <script src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.3/js/tether.min.js" integrity="sha256-mIiWebTG82x+OcV3vUA49ffGDIAJ53uC9jflw5/+REs=" crossorigin="anonymous"></script>
+            <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
+        {% endblock %}
+    </head>
+    <body>
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse mb-4">
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand" href="{{ url('homepage') }}">UTS Quiz</a>
+        <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item{% block prepare_active%}{% endblock %}">
+                    <a class="nav-link" href="{{ url('prepare') }}">Как делать?</a>
+                </li>
+                <li class="nav-item{% block task_active%}{% endblock %}">
+                    <a class="nav-link" href="{{ url('task') }}">Что делать?</a>
+                </li>
+                <li class="nav-item{% block test_active%}{% endblock %}">
+                    <a class="nav-link" href="{{ url('test') }}">Где проверять?</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container">
+        {% block body %}{% endblock %}
+    </div>
+    </body>
+</html>

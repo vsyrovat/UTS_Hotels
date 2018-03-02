@@ -1,0 +1,52 @@
+{% extends 'base.html.twig' %}
+
+{% block test_active%} active{% endblock %}
+
+{% block body %}
+    <div class="jumbotron hidden">
+        <h1>Поиск отелей</h1>
+        {{ form(form) }}
+    </div>
+    <div class="row">
+        <div class="col-lg-12"></div>
+    </div>
+    {% if request.error %}
+        <div class="row">
+            <div class="col-lg-12 alert alert-danger">
+                Поиск завершился ошибкой, попробуйте повторить или изменить параметры
+            </div>
+        </div>
+    {% elseif request.new %}
+        <div class="row">
+            <div class="col-lg-12 alert alert-warning">
+                Поиск ещё не был завершен. Повторите попытку позже.
+            </div>
+        </div>
+    {% else %}
+        {# total items count #}
+        <div class="row">
+            <div class="col-lg-12 text-muted">
+                Всего предложений: {{ pagination.getTotalItemCount }}
+            </div>
+        </div>
+        <div>
+            {{ knp_pagination_render(pagination) }}
+        </div>
+        {# table body #}
+        {% for item in pagination.items %}
+            <div class="row">
+                <div class="col-lg-1">{{ loop.index + pagination.getItemNumberPerPage * (pagination.page - 1) }}</div>
+                <div class="col-lg-6">
+                    <span class="text-capitalize">{{ item.hotel.name }}</span>
+                    <span class="text-primary">{{ item.roomName }}</span>
+                    <span class="text-muted">({{ item.meal.name }})</span>
+                </div>
+                <div class="col-lg-2">{{ item.price.amount }} {{ item.price.currency }}</div>
+            </div>
+        {% endfor %}
+        {# display navigation #}
+        <div>
+            {{ knp_pagination_render(pagination) }}
+        </div>
+    {% endif %}
+{% endblock %}

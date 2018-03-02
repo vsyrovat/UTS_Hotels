@@ -1,0 +1,41 @@
+{% block dependent_entity_widget %}
+
+    <select {{ block('widget_attributes') }} class="form-control"></select>
+    <script type="text/javascript">
+        jQuery(function(){
+            jQuery("select#{{ form.parent.offsetGet( parent ).vars.id }}").change( function() {
+                var selected_index = {{ value ? value : 0 }};
+                jQuery("#loader").show();
+                jQuery.ajax({
+                    type: "POST",
+                    data: {
+                        value: jQuery(this).val(),
+                        alias: "{{ alias }}"
+                    },
+                    url:"{{ path('data') }}",
+                    success: function(data){
+                        if (data){
+                            var msg = '<option value=""></option>';
+                            for (var i in data) if (data.hasOwnProperty(i)) {
+                                msg += '<option value="' + i + '">' + data[i] + '</option>';
+                            }
+                            jQuery("select#{{ form.vars.id }}").html(msg).show();
+                            jQuery.each(jQuery("select#{{ form.vars.id }} option"), function (index, option){
+                                if (jQuery(option).val() == selected_index)
+                                    jQuery(option).prop('selected', true);
+                            });
+                            jQuery("select#{{ form.vars.id }}").trigger('change');
+                        } else {
+                            jQuery("select#{{ form.vars.id }}").html('<em>{{ no_result_msg|trans() }}</em>');
+                        }
+                    },
+                    error: function(xhr, ajaxOptions, thrownError){
+                        jQuery('html').html(xhr.responseText);
+                    }
+                });
+            });
+            jQuery("select#{{ form.parent.offsetGet( parent ).vars.id }}").trigger('change');
+        });
+    </script>
+
+{% endblock %}
