@@ -3,11 +3,8 @@
 namespace App\Controller;
 
 use App\Service\CurrencyRater;
-use App\Service\CustomResultSetFactory;
 use App\Entity\SearchRequest;
-use App\Entity\SearchResult;
 use App\Form\SearchRequestType;
-use App\Repository\SearchResultRepository;
 use App\Service\HotelSearch;
 use App\Service\SearchResultBuilder;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
@@ -76,12 +73,10 @@ class TestController extends Controller
             'request' => $searchRequest
         );
         if ($searchRequest->isCompleted()) {
-            /** @var SearchResultRepository $repository */
             $query = $this->builder->buildHotelSetByRequest($searchRequest);
             $paginator = $this->get('knp_paginator');
             $templateVars['pagination'] = $paginator->paginate($query, $page, 10);
         }
-
 
         return $this->render('Test/results.html.twig', $templateVars);
     }

@@ -2,12 +2,8 @@
 
 namespace App\EventSubscriber;
 
-use App\Entity\SearchResult;
-use App\Entity\Virtual\CustomSearchResult;
 use App\Service\SearchResultBuilder;
-use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\Event\AfterEvent;
-use Knp\Component\Pager\Event\ItemsEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class PaginationSubscriber implements EventSubscriberInterface
@@ -19,13 +15,12 @@ class PaginationSubscriber implements EventSubscriberInterface
         $this->builder = $builder;
     }
 
-    public function after(AfterEvent $event)
+    public function after(AfterEvent $event): void
     {
         $this->builder->applySearchResults(
             $event->getPaginationView()->getItems()
         );
     }
-
 
     public static function getSubscribedEvents()
     {
