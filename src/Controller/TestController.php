@@ -2,11 +2,13 @@
 
 namespace App\Controller;
 
+use App\Service\CustomResultSetFactory;
 use App\Entity\SearchRequest;
 use App\Entity\SearchResult;
 use App\Form\SearchRequestType;
 use App\Repository\SearchResultRepository;
-use App\Service\HotelSearch;;
+use App\Service\HotelSearch;
+use App\Service\SearchResultBuilder;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
@@ -53,7 +55,7 @@ class TestController extends Controller
      * @param int $page
      * @return Response
      */
-    public function results(SearchRequest $searchRequest, int $page = 1)
+    public function results(SearchResultBuilder $f, SearchRequest $searchRequest, int $page = 1)
     {
         $templateVars = array(
             'form' => $this
@@ -67,11 +69,11 @@ class TestController extends Controller
         );
         if ($searchRequest->isCompleted()) {
             /** @var SearchResultRepository $repository */
-            $repository = $this->getDoctrine()->getRepository(SearchResult::class);
-            $query = $repository->createQueryForPagination($searchRequest);
+            $query = $f->getHotelListByRequest($searchRequest);
             $paginator = $this->get('knp_paginator');
-            $templateVars['pagination'] = $paginator->paginate($query, $page, 50);
+            $templateVars['pagination'] = $paginator->paginate($query, $page, 10);
         }
+
 
         return $this->render('Test/results.html.twig', $templateVars);
     }
