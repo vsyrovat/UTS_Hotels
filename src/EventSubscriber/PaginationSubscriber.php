@@ -4,6 +4,7 @@ namespace App\EventSubscriber;
 
 use App\Entity\SearchResult;
 use App\Entity\Virtual\CustomSearchResult;
+use App\Service\SearchResultBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\Event\AfterEvent;
 use Knp\Component\Pager\Event\ItemsEvent;
@@ -11,52 +12,18 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class PaginationSubscriber implements EventSubscriberInterface
 {
-    private $em;
+    private $builder;
 
-    public function __construct(EntityManagerInterface $em)
+    public function __construct(SearchResultBuilder $builder)
     {
-        $this->em = $em;
+        $this->builder = $builder;
     }
 
     public function after(AfterEvent $event)
     {
-        $items = $event->getPaginationView()->getItems();
-
-        if (empty($items)) {
-            return;
-        }
-
-        $firstItem = reset($items);
-
-        $qb = $this->em->createQueryBuilder();
-
-        $searchResults = $qb
-            ->select('sr')
-            ->from(SearchResult::class, 'sr')
-            ->where($qb->expr()->andX(
-                $qb->expr()->eq('sr.request', '?0'),
-                $qb->expr()->in('sr.hotel', '?1')
-            ))
-            ->setParameters([
-                $firstItem->getRequest()->getId(),
-                array_map(function(CustomSearchResult $csr){ return $csr->getHotel()->getId(); }, $items)
-            ])
-            ->orderBy('sr.price.amount')
-            ->getQuery()
-            ->getResult()
-        ;
-
-        foreach ($items as $item) {
-            $set = [];
-            /* @var $item CustomSearchResult */
-            foreach ($searchResults as $searchResult) {
-                /* @var SearchResult $searchResult */
-                if ($searchResult->getHotel()->getId() === $item->getHotel()->getId()) {
-                    $set[] = $searchResult;
-                }
-            }
-            $item->setSearchResults($set);
-        }
+        $this->builder->applySearchResults(
+            $event->getPaginationView()->getItems()
+        );
     }
 
 

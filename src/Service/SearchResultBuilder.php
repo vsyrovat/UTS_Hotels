@@ -20,7 +20,11 @@ class SearchResultBuilder
         $this->em = $em;
     }
 
-    public function getHotelListByRequest(SearchRequest $request)
+    /**
+     * @param SearchRequest $request
+     * @return CustomSearchResult[]
+     */
+    public function buildHotelSetByRequest(SearchRequest $request): array
     {
         $query = $this->em->createQueryBuilder()
             ->select('h')
@@ -34,7 +38,7 @@ class SearchResultBuilder
             ->setParameters([$request->getId()])
             ->getQuery()
         ;
-        $hotelSet = array_map(
+        $searchSet = array_map(
             function($row) use ($request) {
                 list($hotel, $minPrice, $currency) = $row;
                 return (new CustomSearchResult())
@@ -45,6 +49,46 @@ class SearchResultBuilder
             $query->getResult()
         );
 
-        return $hotelSet;
+        return $searchSet;
+    }
+
+    /**
+     * @param CustomSearchResult[] $searchSet
+     */
+    public function applySearchResults(array $searchSet): void
+    {
+        if (empty($searchSet)) {
+            return;
+        }
+
+        $firstItem = reset($searchSet);
+        $qb = $this->em->createQueryBuilder();
+
+        $searchResults = $qb
+            ->select('sr')
+            ->from(SearchResult::class, 'sr')
+            ->where($qb->expr()->andX(
+                $qb->expr()->eq('sr.request', '?0'),
+                $qb->expr()->in('sr.hotel', '?1')
+            ))
+            ->setParameters([
+                $firstItem->getRequest()->getId(),
+                array_map(function(CustomSearchResult $csr){ return $csr->getHotel()->getId(); }, $searchSet)
+            ])
+            ->orderBy('sr.price.amount')
+            ->getQuery()
+            ->getResult()
+        ;
+        foreach ($searchSet as $csr) {
+            $set = [];
+            /* @var $csr \App\Entity\Virtual\CustomSearchResult */
+            foreach ($searchResults as $searchResult) {
+                /* @var $searchResult \App\Entity\SearchResult */
+                if ($searchResult->getHotel()->getId() === $csr->getHotel()->getId()) {
+                    $set[] = $searchResult;
+                }
+            }
+            $csr->setSearchResults($set);
+        }
     }
 }

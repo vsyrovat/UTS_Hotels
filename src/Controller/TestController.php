@@ -20,6 +20,13 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class TestController extends Controller
 {
+    private $builder;
+
+    public function __construct(SearchResultBuilder $builder)
+    {
+        $this->builder = $builder;
+    }
+
     /**
      * @Route("/test", name="test")
      * @param Request $request
@@ -55,7 +62,7 @@ class TestController extends Controller
      * @param int $page
      * @return Response
      */
-    public function results(SearchResultBuilder $f, SearchRequest $searchRequest, int $page = 1)
+    public function results(SearchRequest $searchRequest, int $page = 1)
     {
         $templateVars = array(
             'form' => $this
@@ -69,7 +76,7 @@ class TestController extends Controller
         );
         if ($searchRequest->isCompleted()) {
             /** @var SearchResultRepository $repository */
-            $query = $f->getHotelListByRequest($searchRequest);
+            $query = $this->builder->buildHotelSetByRequest($searchRequest);
             $paginator = $this->get('knp_paginator');
             $templateVars['pagination'] = $paginator->paginate($query, $page, 10);
         }
