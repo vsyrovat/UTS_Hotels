@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Service\CurrencyRater;
 use App\Service\CustomResultSetFactory;
 use App\Entity\SearchRequest;
 use App\Entity\SearchResult;
@@ -32,7 +33,7 @@ class TestController extends Controller
      * @param Request $request
      * @return Response
      */
-    public function index(Request $request)
+    public function index(Request $request, CurrencyRater $rater)
     {
         $form = $this->createForm(SearchRequestType::class, new SearchRequest());
         $form->handleRequest($request);

@@ -15,9 +15,12 @@ class SearchResultBuilder
     /* @var \Doctrine\ORM\EntityManagerInterface */
     private $em;
 
-    public function __construct(EntityManagerInterface $em)
+    private $rater;
+
+    public function __construct(EntityManagerInterface $em, CurrencyRater $rater)
     {
         $this->em = $em;
+        $this->rater = $rater;
     }
 
     /**
@@ -34,8 +37,19 @@ class SearchResultBuilder
             ->join(SearchResult::class, 'sr', Expr\Join::WITH, 'h.id=sr.hotel')
             ->where('sr.request = ?0')
             ->groupBy('sr.hotel')
-            ->orderBy('MIN(sr.price.amount)')
-            ->setParameters([$request->getId()])
+            ->orderBy('MIN(sr.price.amount * (CASE
+                  WHEN sr.price.currency=\'RUB\' THEN 1
+                  WHEN sr.price.currency=\'EUR\' THEN ?1
+                  WHEN sr.price.currency=\'GBP\' THEN ?2
+                  WHEN sr.price.currency=\'USD\' THEN ?3
+                  ELSE 1000
+                END))')
+            ->setParameters([
+                $request->getId(),
+                $this->rater->getRate('EUR'),
+                $this->rater->getRate('GBP'),
+                $this->rater->getRate('USD'),
+            ])
             ->getQuery()
         ;
         $searchSet = array_map(
