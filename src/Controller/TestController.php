@@ -2,11 +2,11 @@
 
 namespace App\Controller;
 
+use App\Service\CurrencyRater;
 use App\Entity\SearchRequest;
-use App\Entity\SearchResult;
 use App\Form\SearchRequestType;
-use App\Repository\SearchResultRepository;
-use App\Service\HotelSearch;;
+use App\Service\HotelSearch;
+use App\Service\SearchResultBuilder;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
@@ -18,12 +18,19 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class TestController extends Controller
 {
+    private $builder;
+
+    public function __construct(SearchResultBuilder $builder)
+    {
+        $this->builder = $builder;
+    }
+
     /**
      * @Route("/test", name="test")
      * @param Request $request
      * @return Response
      */
-    public function index(Request $request)
+    public function index(Request $request, CurrencyRater $rater)
     {
         $form = $this->createForm(SearchRequestType::class, new SearchRequest());
         $form->handleRequest($request);
@@ -66,11 +73,9 @@ class TestController extends Controller
             'request' => $searchRequest
         );
         if ($searchRequest->isCompleted()) {
-            /** @var SearchResultRepository $repository */
-            $repository = $this->getDoctrine()->getRepository(SearchResult::class);
-            $query = $repository->createQueryForPagination($searchRequest);
+            $query = $this->builder->buildHotelSetByRequest($searchRequest);
             $paginator = $this->get('knp_paginator');
-            $templateVars['pagination'] = $paginator->paginate($query, $page, 50);
+            $templateVars['pagination'] = $paginator->paginate($query, $page, 10);
         }
 
         return $this->render('Test/results.html.twig', $templateVars);

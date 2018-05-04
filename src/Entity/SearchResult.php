@@ -6,6 +6,11 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * @ORM\Entity(repositoryClass="App\Repository\SearchResultRepository")
+ * @ORM\Table(
+ *     name="search_result",
+ *     indexes={
+ *         @ORM\Index(columns={"request_id","hotel_id"})
+ *     })
  */
 class SearchResult
 {
