@@ -2,7 +2,9 @@
 
 namespace App\Service;
 
+use App\Entity\Discount;
 use App\Entity\Money;
+use App\Entity\SpecialOffer;
 use App\Entity\Virtual\CustomSearchResult;
 use App\Entity\Hotel;
 use App\Entity\SearchRequest;
@@ -93,6 +95,19 @@ class SearchResultBuilder
             ->getQuery()
             ->getResult()
         ;
+        $offers = $this->em->getRepository(SpecialOffer::class)->findBy(['isActive' => true]);
+
+        foreach ($searchResults as $searchResult) {
+            /* @var $searchResult \App\Entity\SearchResult */
+            list($bestOffer, $discountPercent) = $this->getBestOfferForSearchResult($offers, $searchResult);
+            if ($bestOffer) {
+                $searchResult->setOffer($bestOffer);
+                $searchResult->setOfferPrice(new Money(
+                    strval(floatval($searchResult->getPrice()->getAmount()) * (1 - $discountPercent / 100)),
+                    $searchResult->getPrice()->getCurrency()
+                ));
+            }
+        }
         foreach ($searchSet as $csr) {
             $set = [];
             /* @var $csr \App\Entity\Virtual\CustomSearchResult */
@@ -104,5 +119,43 @@ class SearchResultBuilder
             }
             $csr->setSearchResults($set);
         }
+    }
+
+    /**
+     * @param SpecialOffer[] $offers
+     * @param SearchResult $searchResult
+     * @return array
+     */
+    private function getBestOfferForSearchResult(array $offers, SearchResult &$searchResult): array
+    {
+        $bestOffer = null;
+        $offerWeightFinal = 0;
+        $discountPercentFinal = 0;
+
+        foreach ($offers as $offer) {
+            /* @var $offer \App\Entity\SpecialOffer */
+            if ($offer->getCountry() && $offer->getCountry()->getId() != $searchResult->getHotel()->getCity()->getCountry()->getId() ||
+                $offer->getCity() && $offer->getCity()->getId() != $searchResult->getHotel()->getCity()->getId() ||
+                $offer->getHotel() && $offer->getHotel()->getId() != $searchResult->getHotel()->getId()
+            ) {
+                continue;
+            }
+
+            $discount = $offer->getDiscount();
+            $discountPercent = $discount->getType() === Discount::DISCOUNT_TYPE_ABSOLUTE
+                ? 100 * $discount->getValue() / ($searchResult->getPrice()->getAmount() * $this->rater->getRate($searchResult->getPrice()->getCurrency()))
+                : $discount->getValue();
+            $offerWeight = $discountPercent +
+                (!empty($offer->getCountry()) && ($offer->getCountry()->getId() == $searchResult->getHotel()->getCity()->getCountry()->getId())) * 100 +
+                (!empty($offer->getCity()) && ($offer->getCity()->getId() == $searchResult->getHotel()->getCity()->getId())) * 1000 +
+                (!empty($offer->getHotel()) && ($offer->getHotel()->getId() == $searchResult->getHotel()->getId())) * 10000;
+            if ($offerWeight > $offerWeightFinal) {
+                $bestOffer = $offer;
+                $offerWeightFinal = $offerWeight;
+                $discountPercentFinal = $discountPercent;
+            }
+        }
+
+        return [$bestOffer, $discountPercentFinal];
     }
 }

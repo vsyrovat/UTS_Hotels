@@ -41,12 +41,23 @@
             </div>
             {% for searchResult in item.searchResults %}
                 <div class="row">
-                    <div class="col-lg-1"></div>
-                    <div class="col-lg-6">
-                        <span class="text-primary">{{ searchResult.roomName }}</span>
-                        <span class="text-muted">({{ searchResult.meal.name }})</span>
-                    </div>
-                    <div class="col-lg-2">{{ searchResult.price.amount }} {{ searchResult.price.currency }}</div>
+                    {% if searchResult.offer %}
+                        <div class="col-lg-1"></div>
+                        <div class="col-lg-4">
+                            <span class="text-primary">{{ searchResult.roomName }}</span>
+                            <span class="text-muted">({{ searchResult.meal.name }})</span>
+                        </div>
+                        <div class="col-lg-2 text-danger"><s>{{ searchResult.price.amount }} {{ searchResult.price.currency }}</s></div>
+                        <div class="col-lg-2">{{ searchResult.offerPrice.amount|round(2, 'ceil') }} {{ searchResult.offerPrice.currency }}</div>
+                        <div class="col-lg-3">{% if searchResult.offer %}{{ searchResult.offer.name }}{% endif %}</div>
+                    {% else %}
+                        <div class="col-lg-1"></div>
+                        <div class="col-lg-6">
+                            <span class="text-primary">{{ searchResult.roomName }}</span>
+                            <span class="text-muted">({{ searchResult.meal.name }})</span>
+                        </div>
+                        <div class="col-lg-2">{{ searchResult.price.amount }} {{ searchResult.price.currency }}</div>
+                    {% endif %}
                 </div>
             {% endfor %}
         {% endfor %}

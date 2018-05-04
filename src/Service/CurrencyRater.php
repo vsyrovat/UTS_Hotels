@@ -24,11 +24,18 @@ class CurrencyRater
      */
     public function getRate(string $currency): float
     {
+        $currency = strtoupper($currency);
+
+        if (in_array($currency, ['RUB', 'RUR'])) {
+            return 1;
+        }
+
         $rates = $this->getRatesCached();
         if (!isset($rates[$currency])) {
             dump($rates);
             throw new \RuntimeException('Cannot find rate for currency '.$currency);
         }
+
         return $rates[$currency];
     }
 
