@@ -50,6 +50,12 @@ class SearchResult
      */
     private $roomName;
 
+    /* @var SpecialOffer */
+    private $offer;
+
+    /** @var Money */
+    private $offerPrice;
+
     /**
      * @return mixed
      */
@@ -146,5 +152,39 @@ class SearchResult
     {
         $this->price = $price;
         return $this;
+    }
+
+    /**
+     * @return SpecialOffer
+     */
+    public function getOffer(): ?SpecialOffer
+    {
+        return $this->offer;
+    }
+
+    /**
+     * @param SpecialOffer $offer
+     * @return SearchResult
+     */
+    public function setOffer(?SpecialOffer $offer): SearchResult
+    {
+        $this->offer = $offer;
+        return $this;
+    }
+
+    /**
+     * @return Money
+     */
+    public function getOfferPrice(): ?Money
+    {
+        return $this->offerPrice;
+    }
+
+    /**
+     * @param Money $offerPrice
+     */
+    public function setOfferPrice(?Money $offerPrice): void
+    {
+        $this->offerPrice = $offerPrice;
     }
 }

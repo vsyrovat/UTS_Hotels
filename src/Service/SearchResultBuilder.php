@@ -2,25 +2,27 @@
 
 namespace App\Service;
 
+use App\Entity\City;
+use App\Entity\Country;
+use App\Entity\Currency;
+use App\Entity\Discount;
 use App\Entity\Money;
+use App\Entity\SpecialOffer;
 use App\Entity\Virtual\CustomSearchResult;
 use App\Entity\Hotel;
 use App\Entity\SearchRequest;
 use App\Entity\SearchResult;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query\Expr;
+use Doctrine\ORM\Query\ResultSetMapping;
 
 class SearchResultBuilder
 {
     /* @var \Doctrine\ORM\EntityManagerInterface */
     private $em;
 
-    private $rater;
-
-    public function __construct(EntityManagerInterface $em, CurrencyRater $rater)
+    public function __construct(EntityManagerInterface $em)
     {
         $this->em = $em;
-        $this->rater = $rater;
     }
 
     /**
@@ -29,36 +31,66 @@ class SearchResultBuilder
      */
     public function buildHotelSetByRequest(SearchRequest $request): array
     {
-        $query = $this->em->createQueryBuilder()
-            ->select('h')
-            ->addSelect('MIN(sr.price.amount)')
-            ->addSelect('MIN(sr.price.currency)')
-            ->from(Hotel::class, 'h')
-            ->join(SearchResult::class, 'sr', Expr\Join::WITH, 'h.id=sr.hotel')
-            ->where('sr.request = ?0')
-            ->groupBy('sr.hotel')
-            ->orderBy('MIN(sr.price.amount * (CASE
-                  WHEN sr.price.currency=\'RUB\' THEN 1
-                  WHEN sr.price.currency=\'EUR\' THEN ?1
-                  WHEN sr.price.currency=\'GBP\' THEN ?2
-                  WHEN sr.price.currency=\'USD\' THEN ?3
-                  ELSE 1000
-                END))')
-            ->setParameters([
-                $request->getId(),
-                $this->rater->getRate('EUR'),
-                $this->rater->getRate('GBP'),
-                $this->rater->getRate('USD'),
-            ])
-            ->getQuery()
-        ;
+        $sql = <<<SQL
+SELECT hotel.*,
+       city.name AS city_name,
+       city.country_id,
+       country.name AS country_name,
+       MIN(srs.price_rub) AS min_price_rub,
+       MIN(CASE
+           WHEN so.discount_type='a' THEN (srs.price_rub - so.discount_value)
+           WHEN so.discount_type='m' THEN srs.price_rub * (1 - so.discount_value/100)
+           ELSE srs.price_rub
+       END) AS min_discount_price_rub
+FROM (SELECT sr.*,
+             sr.price_amount * currency.rate AS price_rub,
+             h.city_id,
+             c.country_id
+      FROM search_result AS sr
+      JOIN hotel AS h ON (sr.hotel_id=h.id)
+      JOIN city AS c ON (h.city_id=c.id)
+      JOIN currency ON (currency.id=sr.price_currency)
+      WHERE sr.request_id=:requestId
+      ) AS srs
+LEFT JOIN (SELECT *
+           FROM special_offer
+           WHERE is_active=1
+           ) AS so
+           ON (so.country_id=srs.country_id AND
+              (so.city_id  IS NULL OR (so.city_id=srs.city_id AND
+              (so.hotel_id IS NULL OR so.hotel_id=srs.hotel_id))))
+JOIN hotel ON (hotel.id=srs.hotel_id)
+JOIN city ON (city.id=hotel.city_id)
+JOIN country ON (country.id=city.country_id)
+GROUP BY srs.hotel_id
+ORDER BY min_discount_price_rub
+SQL;
+
+        $rsm = new ResultSetMapping();
+        $rsm->addEntityResult(Hotel::class, 'hotel');
+        $rsm->addFieldResult('hotel', 'id', 'id');
+        $rsm->addFieldResult('hotel', 'name', 'name');
+        $rsm->addJoinedEntityResult(City::class, 'city', 'hotel', 'city');
+        $rsm->addFieldResult('city', 'city_id', 'id');
+        $rsm->addFieldResult('city', 'city_name', 'name');
+        $rsm->addJoinedEntityResult(Country::class, 'country', 'city', 'country');
+        $rsm->addFieldResult('country', 'country_id', 'id');
+        $rsm->addFieldResult('country', 'country_name', 'name');
+        $rsm->addScalarResult('min_price_rub', 'min_price_rub');
+        $rsm->addScalarResult('min_discount_price_rub', 'min_discount_price_rub');
+
+        $query = $this->em->createNativeQuery($sql, $rsm);
+        $query->setParameters([
+            'requestId' => $request->getId(),
+        ]);
+
         $searchSet = array_map(
             function($row) use ($request) {
-                list($hotel, $minPrice, $currency) = $row;
+                list($hotel, $minPriceRub, $minDiscountPriceRub) = array_values($row);
                 return (new CustomSearchResult())
                     ->setRequest($request)
                     ->setHotel($hotel)
-                    ->setMinPrice(new Money($minPrice, $currency));
+                    ->setMinPrice(new Money($minDiscountPriceRub, 'RUB'));
             },
             $query->getResult()
         );
@@ -93,16 +125,70 @@ class SearchResultBuilder
             ->getQuery()
             ->getResult()
         ;
-        foreach ($searchSet as $csr) {
-            $set = [];
-            /* @var $csr \App\Entity\Virtual\CustomSearchResult */
-            foreach ($searchResults as $searchResult) {
-                /* @var $searchResult \App\Entity\SearchResult */
-                if ($searchResult->getHotel()->getId() === $csr->getHotel()->getId()) {
-                    $set[] = $searchResult;
-                }
+        $offers = $this->em->getRepository(SpecialOffer::class)->findBy(['isActive' => true]);
+
+        $rates = array_column(
+            array_map(
+                function(Currency $obj){ return [$obj->getId(), $obj->getRate()]; },
+                $this->em->getRepository(Currency::class)->findAll()
+            ),
+            1,
+            0
+        );
+        foreach ($searchResults as $searchResult) {
+            /* @var $searchResult \App\Entity\SearchResult */
+            list($bestOffer, $discountPercent) = $this->getBestOfferForSearchResult($offers, $rates, $searchResult);
+            if ($bestOffer) {
+                $searchResult->setOffer($bestOffer);
+                $searchResult->setOfferPrice($searchResult->getPrice()->mul(1 - $discountPercent / 100));
             }
-            $csr->setSearchResults($set);
         }
+        foreach ($searchSet as $csr) {
+            /* @var $csr \App\Entity\Virtual\CustomSearchResult */
+            $set = array_filter($searchResults, function(SearchResult $sr) use ($csr){
+                return $sr->getHotel()->getId() === $csr->getHotel()->getId();
+            });
+            $csr->setSearchResults($set);
+            $csr->setMinPrice(($s = reset($set))->getOfferPrice() ?: $s->getPrice());
+        }
+    }
+
+    /**
+     * @param SpecialOffer[] $offers
+     * @param Currency[] $rates
+     * @param SearchResult $searchResult
+     * @return array
+     */
+    private function getBestOfferForSearchResult(array $offers, array $rates, SearchResult $searchResult): array
+    {
+        $bestOffer = null;
+        $offerWeightFinal = 0;
+        $discountPercentFinal = 0;
+
+        foreach ($offers as $offer) {
+            /* @var $offer \App\Entity\SpecialOffer */
+            if ($offer->getCountry() && $offer->getCountry()->getId() != $searchResult->getHotel()->getCity()->getCountry()->getId() ||
+                $offer->getCity() && $offer->getCity()->getId() != $searchResult->getHotel()->getCity()->getId() ||
+                $offer->getHotel() && $offer->getHotel()->getId() != $searchResult->getHotel()->getId()
+            ) {
+                continue;
+            }
+
+            $discount = $offer->getDiscount();
+            $discountPercent = $discount->getType() === Discount::DISCOUNT_TYPE_ABSOLUTE
+                ? 100 * $discount->getValue() / ($searchResult->getPrice()->getAmount() * $rates[$searchResult->getPrice()->getCurrency()])
+                : $discount->getValue();
+            $offerWeight = $discountPercent +
+                (!empty($offer->getCountry()) && ($offer->getCountry()->getId() == $searchResult->getHotel()->getCity()->getCountry()->getId())) * 100 +
+                (!empty($offer->getCity()) && ($offer->getCity()->getId() == $searchResult->getHotel()->getCity()->getId())) * 1000 +
+                (!empty($offer->getHotel()) && ($offer->getHotel()->getId() == $searchResult->getHotel()->getId())) * 10000;
+            if ($offerWeight > $offerWeightFinal) {
+                $bestOffer = $offer;
+                $offerWeightFinal = $offerWeight;
+                $discountPercentFinal = $discountPercent;
+            }
+        }
+
+        return [$bestOffer, $discountPercentFinal];
     }
 }

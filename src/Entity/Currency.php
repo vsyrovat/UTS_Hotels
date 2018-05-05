@@ -37,4 +37,12 @@ class Currency
     {
         return $this->rate;
     }
+
+    /**
+     * @param float $rate
+     */
+    public function setRate(float $rate): void
+    {
+        $this->rate = $rate;
+    }
 }

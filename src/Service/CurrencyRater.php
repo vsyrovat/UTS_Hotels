@@ -2,19 +2,24 @@
 
 namespace App\Service;
 
+use App\Exception\CurrencyRaterException;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 
 class CurrencyRater
 {
+    const FETCH_URL = 'http://www.cbr.ru/scripts/XML_daily.asp';
+
     private $cachePool;
     private $logger;
     private $ttl = 3600;
+    private $fetchUrl;
 
     public function __construct(CacheItemPoolInterface $cachePool, LoggerInterface $logger)
     {
         $this->cachePool = $cachePool;
         $this->logger = $logger;
+        $this->fetchUrl = self::FETCH_URL;
     }
 
     /**
@@ -24,11 +29,17 @@ class CurrencyRater
      */
     public function getRate(string $currency): float
     {
+        $currency = strtoupper($currency);
+
+        if (in_array($currency, ['RUB', 'RUR'])) {
+            return 1;
+        }
+
         $rates = $this->getRatesCached();
         if (!isset($rates[$currency])) {
-            dump($rates);
-            throw new \RuntimeException('Cannot find rate for currency '.$currency);
+            throw new CurrencyRaterException('Cannot find rate for currency '.$currency);
         }
+
         return $rates[$currency];
     }
 
@@ -38,7 +49,7 @@ class CurrencyRater
     private function getRates(): array
     {
         $result = [];
-        $content = file_get_contents('http://www.cbr.ru/scripts/XML_daily.asp');
+        $content = file_get_contents($this->fetchUrl);
         if ($content) {
             $xml = simplexml_load_string($content);
             foreach ($xml->Valute as $valute){
@@ -81,6 +92,6 @@ class CurrencyRater
      */
     private function getCacheKey()
     {
-        return sprintf('CURRENCY_RATES_%s', md5(serialize(__FILE__)));
+        return sprintf('CURRENCY_RATES_%s', md5($this->fetchUrl));
     }
 }
