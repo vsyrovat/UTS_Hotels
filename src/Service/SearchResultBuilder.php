@@ -46,18 +46,13 @@ SELECT hotel.*,
            ELSE srs.price_rub
        END) AS min_discount_price_rub
 FROM (SELECT sr.*,
-             sr.price_amount * (CASE
-                 WHEN sr.price_currency='RUB' THEN 1
-                 WHEN sr.price_currency='EUR' THEN :rateEUR
-                 WHEN sr.price_currency='GBP' THEN :rateGBP
-                 WHEN sr.price_currency='USD' THEN :rateUSD
-                 ELSE NULL
-             END) AS price_rub,
+             sr.price_amount * currency.rate AS price_rub,
              h.city_id,
              c.country_id
       FROM search_result AS sr
       JOIN hotel AS h ON (sr.hotel_id=h.id)
       JOIN city AS c ON (h.city_id=c.id)
+      JOIN currency ON (currency.id=sr.price_currency)
       WHERE sr.request_id=:requestId
       ) AS srs
 LEFT JOIN (SELECT *
@@ -90,9 +85,6 @@ SQL;
         $query = $this->em->createNativeQuery($sql, $rsm);
         $query->setParameters([
             'requestId' => $request->getId(),
-            'rateEUR' => $this->rater->getRate('EUR'),
-            'rateGBP' => $this->rater->getRate('GBP'),
-            'rateUSD' => $this->rater->getRate('USD'),
         ]);
 
         $searchSet = array_map(
@@ -101,7 +93,7 @@ SQL;
                 return (new CustomSearchResult())
                     ->setRequest($request)
                     ->setHotel($hotel)
-                    ->setMinPrice(new Money(ceil($minDiscountPriceRub), 'RUB'));
+                    ->setMinPrice(new Money(number_format(floatval($minDiscountPriceRub), 2, '.', ''), 'RUB'));
             },
             $query->getResult()
         );
