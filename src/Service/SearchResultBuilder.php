@@ -2,6 +2,8 @@
 
 namespace App\Service;
 
+use App\Entity\City;
+use App\Entity\Country;
 use App\Entity\Discount;
 use App\Entity\Money;
 use App\Entity\SpecialOffer;
@@ -11,6 +13,7 @@ use App\Entity\SearchRequest;
 use App\Entity\SearchResult;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query\Expr;
+use Doctrine\ORM\Query\ResultSetMapping;
 
 class SearchResultBuilder
 {
@@ -31,36 +34,74 @@ class SearchResultBuilder
      */
     public function buildHotelSetByRequest(SearchRequest $request): array
     {
-        $query = $this->em->createQueryBuilder()
-            ->select('h')
-            ->addSelect('MIN(sr.price.amount)')
-            ->addSelect('MIN(sr.price.currency)')
-            ->from(Hotel::class, 'h')
-            ->join(SearchResult::class, 'sr', Expr\Join::WITH, 'h.id=sr.hotel')
-            ->where('sr.request = ?0')
-            ->groupBy('sr.hotel')
-            ->orderBy('MIN(sr.price.amount * (CASE
-                  WHEN sr.price.currency=\'RUB\' THEN 1
-                  WHEN sr.price.currency=\'EUR\' THEN ?1
-                  WHEN sr.price.currency=\'GBP\' THEN ?2
-                  WHEN sr.price.currency=\'USD\' THEN ?3
-                  ELSE 1000
-                END))')
-            ->setParameters([
-                $request->getId(),
-                $this->rater->getRate('EUR'),
-                $this->rater->getRate('GBP'),
-                $this->rater->getRate('USD'),
-            ])
-            ->getQuery()
-        ;
+        $sql = <<<SQL
+SELECT hotel.*,
+       city.name AS city_name,
+       city.country_id,
+       country.name AS country_name,
+       MIN(srs.price_rub) AS min_price_rub,
+       MIN(CASE
+           WHEN so.discount_type='a' THEN (srs.price_rub - so.discount_value)
+           WHEN so.discount_type='m' THEN srs.price_rub * (1 - so.discount_value/100)
+           ELSE srs.price_rub
+       END) AS min_discount_price_rub
+FROM (SELECT sr.*,
+             sr.price_amount * (CASE
+                 WHEN sr.price_currency='RUB' THEN 1
+                 WHEN sr.price_currency='EUR' THEN :rateEUR
+                 WHEN sr.price_currency='GBP' THEN :rateGBP
+                 WHEN sr.price_currency='USD' THEN :rateUSD
+                 ELSE NULL
+             END) AS price_rub,
+             h.city_id,
+             c.country_id
+      FROM search_result AS sr
+      JOIN hotel AS h ON (sr.hotel_id=h.id)
+      JOIN city AS c ON (h.city_id=c.id)
+      WHERE sr.request_id=:requestId
+      ) AS srs
+LEFT JOIN (SELECT *
+           FROM special_offer
+           WHERE is_active=1
+           ) AS so
+           ON (so.country_id=srs.country_id AND
+              (so.city_id  IS NULL OR (so.city_id=srs.city_id AND
+              (so.hotel_id IS NULL OR so.hotel_id=srs.hotel_id))))
+JOIN hotel ON (hotel.id=srs.hotel_id)
+JOIN city ON (city.id=hotel.city_id)
+JOIN country ON (country.id=city.country_id)
+GROUP BY srs.hotel_id
+ORDER BY min_discount_price_rub
+SQL;
+
+        $rsm = new ResultSetMapping();
+        $rsm->addEntityResult(Hotel::class, 'hotel');
+        $rsm->addFieldResult('hotel', 'id', 'id');
+        $rsm->addFieldResult('hotel', 'name', 'name');
+        $rsm->addJoinedEntityResult(City::class, 'city', 'hotel', 'city');
+        $rsm->addFieldResult('city', 'city_id', 'id');
+        $rsm->addFieldResult('city', 'city_name', 'name');
+        $rsm->addJoinedEntityResult(Country::class, 'country', 'city', 'country');
+        $rsm->addFieldResult('country', 'country_id', 'id');
+        $rsm->addFieldResult('country', 'country_name', 'name');
+        $rsm->addScalarResult('min_price_rub', 'min_price_rub');
+        $rsm->addScalarResult('min_discount_price_rub', 'min_discount_price_rub');
+
+        $query = $this->em->createNativeQuery($sql, $rsm);
+        $query->setParameters([
+            'requestId' => $request->getId(),
+            'rateEUR' => $this->rater->getRate('EUR'),
+            'rateGBP' => $this->rater->getRate('GBP'),
+            'rateUSD' => $this->rater->getRate('USD'),
+        ]);
+
         $searchSet = array_map(
             function($row) use ($request) {
-                list($hotel, $minPrice, $currency) = $row;
+                list($hotel, $minPriceRub, $minDiscountPriceRub) = array_values($row);
                 return (new CustomSearchResult())
                     ->setRequest($request)
                     ->setHotel($hotel)
-                    ->setMinPrice(new Money($minPrice, $currency));
+                    ->setMinPrice(new Money(ceil($minDiscountPriceRub), 'RUB'));
             },
             $query->getResult()
         );
