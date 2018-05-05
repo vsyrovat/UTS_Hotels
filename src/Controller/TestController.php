@@ -30,7 +30,7 @@ class TestController extends Controller
      * @param Request $request
      * @return Response
      */
-    public function index(Request $request, CurrencyRater $rater)
+    public function index(Request $request)
     {
         $form = $this->createForm(SearchRequestType::class, new SearchRequest());
         $form->handleRequest($request);
