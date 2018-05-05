@@ -12,7 +12,6 @@ use App\Entity\Hotel;
 use App\Entity\SearchRequest;
 use App\Entity\SearchResult;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Query\Expr;
 use Doctrine\ORM\Query\ResultSetMapping;
 
 class SearchResultBuilder
@@ -142,15 +141,12 @@ SQL;
             }
         }
         foreach ($searchSet as $csr) {
-            $set = [];
             /* @var $csr \App\Entity\Virtual\CustomSearchResult */
-            foreach ($searchResults as $searchResult) {
-                /* @var $searchResult \App\Entity\SearchResult */
-                if ($searchResult->getHotel()->getId() === $csr->getHotel()->getId()) {
-                    $set[] = $searchResult;
-                }
-            }
+            $set = array_filter($searchResults, function(SearchResult $sr) use ($csr){
+                return $sr->getHotel()->getId() === $csr->getHotel()->getId();
+            });
             $csr->setSearchResults($set);
+            $csr->setMinPrice(($s = reset($set))->getOfferPrice() ?: $s->getPrice());
         }
     }
 
@@ -159,7 +155,7 @@ SQL;
      * @param SearchResult $searchResult
      * @return array
      */
-    private function getBestOfferForSearchResult(array $offers, SearchResult &$searchResult): array
+    private function getBestOfferForSearchResult(array $offers, SearchResult $searchResult): array
     {
         $bestOffer = null;
         $offerWeightFinal = 0;
