@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Entity\City;
 use App\Entity\Country;
+use App\Entity\Currency;
 use App\Entity\Discount;
 use App\Entity\Money;
 use App\Entity\SpecialOffer;
@@ -19,12 +20,9 @@ class SearchResultBuilder
     /* @var \Doctrine\ORM\EntityManagerInterface */
     private $em;
 
-    private $rater;
-
-    public function __construct(EntityManagerInterface $em, CurrencyRater $rater)
+    public function __construct(EntityManagerInterface $em)
     {
         $this->em = $em;
-        $this->rater = $rater;
     }
 
     /**
@@ -129,9 +127,17 @@ SQL;
         ;
         $offers = $this->em->getRepository(SpecialOffer::class)->findBy(['isActive' => true]);
 
+        $rates = array_column(
+            array_map(
+                function(Currency $obj){ return [$obj->getId(), $obj->getRate()]; },
+                $this->em->getRepository(Currency::class)->findAll()
+            ),
+            1,
+            0
+        );
         foreach ($searchResults as $searchResult) {
             /* @var $searchResult \App\Entity\SearchResult */
-            list($bestOffer, $discountPercent) = $this->getBestOfferForSearchResult($offers, $searchResult);
+            list($bestOffer, $discountPercent) = $this->getBestOfferForSearchResult($offers, $rates, $searchResult);
             if ($bestOffer) {
                 $searchResult->setOffer($bestOffer);
                 $searchResult->setOfferPrice($searchResult->getPrice()->mul(1 - $discountPercent / 100));
@@ -149,10 +155,11 @@ SQL;
 
     /**
      * @param SpecialOffer[] $offers
+     * @param Currency[] $rates
      * @param SearchResult $searchResult
      * @return array
      */
-    private function getBestOfferForSearchResult(array $offers, SearchResult $searchResult): array
+    private function getBestOfferForSearchResult(array $offers, array $rates, SearchResult $searchResult): array
     {
         $bestOffer = null;
         $offerWeightFinal = 0;
@@ -169,7 +176,7 @@ SQL;
 
             $discount = $offer->getDiscount();
             $discountPercent = $discount->getType() === Discount::DISCOUNT_TYPE_ABSOLUTE
-                ? 100 * $discount->getValue() / ($searchResult->getPrice()->getAmount() * $this->rater->getRate($searchResult->getPrice()->getCurrency()))
+                ? 100 * $discount->getValue() / ($searchResult->getPrice()->getAmount() * $rates[$searchResult->getPrice()->getCurrency()])
                 : $discount->getValue();
             $offerWeight = $discountPercent +
                 (!empty($offer->getCountry()) && ($offer->getCountry()->getId() == $searchResult->getHotel()->getCity()->getCountry()->getId())) * 100 +
