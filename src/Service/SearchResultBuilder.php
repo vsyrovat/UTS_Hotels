@@ -92,7 +92,7 @@ SQL;
                 return (new CustomSearchResult())
                     ->setRequest($request)
                     ->setHotel($hotel)
-                    ->setMinPrice(new Money(number_format(floatval($minDiscountPriceRub), 2, '.', ''), 'RUB'));
+                    ->setMinPrice(new Money($minDiscountPriceRub, 'RUB'));
             },
             $query->getResult()
         );
@@ -134,10 +134,7 @@ SQL;
             list($bestOffer, $discountPercent) = $this->getBestOfferForSearchResult($offers, $searchResult);
             if ($bestOffer) {
                 $searchResult->setOffer($bestOffer);
-                $searchResult->setOfferPrice(new Money(
-                    strval(floatval($searchResult->getPrice()->getAmount()) * (1 - $discountPercent / 100)),
-                    $searchResult->getPrice()->getCurrency()
-                ));
+                $searchResult->setOfferPrice($searchResult->getPrice()->mul(1 - $discountPercent / 100));
             }
         }
         foreach ($searchSet as $csr) {
